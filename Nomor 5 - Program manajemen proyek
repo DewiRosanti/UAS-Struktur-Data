@@ -2,142 +2,186 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Struktur data untuk task
-typedef struct Task {
-    int id_task;
-    char nama_task[100];
-    int prioritas; // 1 = tinggi, 2 = sedang, 3 = rendah
-    char deadline[20];
-    struct Task* next;
+#define MAX_TASKS 100
+#define PRIORITY_WEIGHT 10 // Bobot prioritas level untuk menghitung kombinasi prioritas
+
+typedef struct {
+    int task_id;
+    char description[100];
+    int priority_level;
+    int deadline;
+    char assigned_to[50];
+    int combined_priority;
 } Task;
 
-// Fungsi untuk membuat task baru
-Task* createTask(int id_task, char* nama_task, int prioritas, char* deadline) {
-    Task* newTask = (Task*)malloc(sizeof(Task));
-    newTask->id_task = id_task;
-    strcpy(newTask->nama_task, nama_task);
-    newTask->prioritas = prioritas;
-    strcpy(newTask->deadline, deadline);
-    newTask->next = NULL;
-    return newTask;
+Task maxHeap[MAX_TASKS];
+int heapSize = 0;
+
+// Fungsi untuk menghitung kombinasi prioritas
+int calculateCombinedPriority(int priority_level, int deadline) {
+    return (priority_level * PRIORITY_WEIGHT) - deadline;
 }
 
-// Fungsi untuk menampilkan semua task
-void displayTasks(Task* head) {
-    if (head == NULL) {
-        printf("Tidak ada task yang tersedia.\n");
+// Fungsi untuk menukar dua elemen heap
+void swap(Task *a, Task *b) {
+    Task temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+// Heapify ke atas untuk menjaga struktur Max-Heap
+void heapifyUp(int index) {
+    int parent = (index - 1) / 2;
+    if (index > 0 && maxHeap[index].combined_priority > maxHeap[parent].combined_priority) {
+        swap(&maxHeap[index], &maxHeap[parent]);
+        heapifyUp(parent);
+    }
+}
+
+// Heapify ke bawah untuk menjaga struktur Max-Heap
+void heapifyDown(int index) {
+    int largest = index;
+    int left = 2 * index + 1;
+    int right = 2 * index + 2;
+
+    if (left < heapSize && maxHeap[left].combined_priority > maxHeap[largest].combined_priority) {
+        largest = left;
+    }
+    if (right < heapSize && maxHeap[right].combined_priority > maxHeap[largest].combined_priority) {
+        largest = right;
+    }
+    if (largest != index) {
+        swap(&maxHeap[index], &maxHeap[largest]);
+        heapifyDown(largest);
+    }
+}
+
+// Fungsi untuk menambahkan task ke Max-Heap
+void insertTask(int task_id, char *description, int priority_level, int deadline) {
+    if (heapSize >= MAX_TASKS) {
+        printf("Heap penuh, tidak bisa menambah task baru\n");
         return;
     }
-    
-    Task* temp = head;
-    printf("\n=== Daftar Task ===\n");
-    while (temp != NULL) {
-        printf("ID Task: %d, Nama Task: %s, Prioritas: %d, Deadline: %s\n",
-               temp->id_task, temp->nama_task, temp->prioritas, temp->deadline);
-        temp = temp->next;
-    }
+    Task task;
+    task.task_id = task_id;
+    strcpy(task.description, description);
+    task.priority_level = priority_level;
+    task.deadline = deadline;
+    strcpy(task.assigned_to, "Unassigned");
+    task.combined_priority = calculateCombinedPriority(priority_level, deadline);
+
+    maxHeap[heapSize] = task;
+    heapifyUp(heapSize);
+    heapSize++;
+    printf("Task '%s' berhasil ditambahkan ke heap\n", description);
 }
 
-// Fungsi untuk menambahkan task
-Task* insertTask(Task* head, int id_task, char* nama_task, int prioritas, char* deadline) {
-    Task* newTask = createTask(id_task, nama_task, prioritas, deadline);
-    if (head == NULL) {
-        return newTask;
+// Fungsi untuk meng-assign task dengan prioritas tertinggi
+void assignTask(char *assigned_to) {
+    if (heapSize == 0) {
+        printf("Tidak ada task yang tersedia untuk diassign\n");
+        return;
     }
-    Task* temp = head;
-    while (temp->next != NULL) {
-        temp = temp->next;
-    }
-    temp->next = newTask;
-    return head;
+    Task topTask = maxHeap[0];
+    strcpy(topTask.assigned_to, assigned_to);
+    printf("Task '%s' dengan prioritas %d diassign ke %s\n", topTask.description, topTask.combined_priority, assigned_to);
+
+    // Menghapus task tertinggi dari heap
+    maxHeap[0] = maxHeap[--heapSize];
+    heapifyDown(0);
 }
 
-// Fungsi untuk assign task
-void assignTask(Task* head, int id_task) {
-    Task* temp = head;
-    while (temp != NULL) {
-        if (temp->id_task == id_task) {
-            printf("Task '%s' dengan ID %d telah ditugaskan.\n", temp->nama_task, temp->id_task);
+// Fungsi untuk meng-update task yang ada
+void updateTask(int task_id, int new_priority_level, int new_deadline) {
+    for (int i = 0; i < heapSize; i++) {
+        if (maxHeap[i].task_id == task_id) {
+            maxHeap[i].priority_level = new_priority_level;
+            maxHeap[i].deadline = new_deadline;
+            maxHeap[i].combined_priority = calculateCombinedPriority(new_priority_level, new_deadline);
+
+            // Re-heapify untuk mempertahankan struktur Max-Heap
+            heapifyUp(i);
+            heapifyDown(i);
+
+            printf("Task dengan ID %d telah diperbarui\n", task_id);
             return;
         }
-        temp = temp->next;
     }
-    printf("Task dengan ID %d tidak ditemukan.\n", id_task);
+    printf("Task dengan ID %d tidak ditemukan\n", task_id);
 }
 
-// Fungsi untuk update task
-void updateTask(Task* head, int id_task) {
-    Task* temp = head;
-    while (temp != NULL) {
-        if (temp->id_task == id_task) {
-            printf("Masukkan nama task baru: ");
-            scanf(" %[^\n]%*c", temp->nama_task);
-            printf("Masukkan tingkat prioritas baru (1=tinggi, 2=sedang, 3=rendah): ");
-            scanf("%d", &temp->prioritas);
-            printf("Masukkan deadline baru: ");
-            scanf(" %[^\n]%*c", temp->deadline);
-            printf("Task dengan ID %d telah diperbarui.\n", id_task);
-            return;
-        }
-        temp = temp->next;
+// Fungsi untuk menampilkan semua task di Max-Heap
+void displayTasks() {
+    if (heapSize == 0) {
+        printf("Tidak ada task dalam heap\n");
+        return;
     }
-    printf("Task dengan ID %d tidak ditemukan.\n", id_task);
+    printf("Daftar task dalam heap:\n");
+    for (int i = 0; i < heapSize; i++) {
+        printf("ID: %d, Deskripsi: %s, Prioritas: %d, Deadline: %d, Assigned to: %s, Combined Priority: %d\n",
+               maxHeap[i].task_id, maxHeap[i].description, maxHeap[i].priority_level,
+               maxHeap[i].deadline, maxHeap[i].assigned_to, maxHeap[i].combined_priority);
+    }
 }
 
 int main() {
-    Task* head = NULL;
-    int choice, id_task, prioritas;
-    char nama_task[100], deadline[20];
+    int choice;
+    int task_id, priority_level, deadline;
+    char description[100], assigned_to[50];
 
-    do {
-        // Menampilkan menu
-        printf("\n=== Menu Manajemen Proyek ===\n");
+    while (1) {
+        printf("\nMenu:\n");
         printf("1. Insert Task\n");
         printf("2. Assign Task\n");
         printf("3. Update Task\n");
-        printf("4. Tampilkan Semua Task\n");
-        printf("5. Keluar\n");
-        printf("Pilihan: ");
+        printf("4. Display Tasks\n");
+        printf("5. Exit\n");
+        printf("Masukkan pilihan Anda: ");
         scanf("%d", &choice);
 
         switch (choice) {
-            case 1: // Insert Task
+            case 1:
                 printf("Masukkan ID Task: ");
-                scanf("%d", &id_task);
-                printf("Masukkan Nama Task: ");
-                scanf(" %[^\n]%*c", nama_task);  // Memasukkan string dengan spasi
-                printf("Masukkan Tingkat Prioritas (1=tinggi, 2=sedang, 3=rendah): ");
-                scanf("%d", &prioritas);
-                printf("Masukkan Deadline (format: dd/mm/yyyy): ");
-                scanf(" %[^\n]%*c", deadline);
-                head = insertTask(head, id_task, nama_task, prioritas, deadline);
-                printf("Task berhasil ditambahkan!\n");
+                scanf("%d", &task_id);
+                printf("Masukkan Deskripsi Task: ");
+                getchar(); // membersihkan newline dari buffer
+                fgets(description, sizeof(description), stdin);
+                description[strcspn(description, "\n")] = 0; // menghapus newline di akhir
+                printf("Masukkan Tingkat Prioritas: ");
+                scanf("%d", &priority_level);
+                printf("Masukkan Deadline (angka lebih kecil berarti lebih dekat): ");
+                scanf("%d", &deadline);
+                insertTask(task_id, description, priority_level, deadline);
                 break;
 
-            case 2: // Assign Task
-                printf("Masukkan ID Task yang ingin ditugaskan: ");
-                scanf("%d", &id_task);
-                assignTask(head, id_task);
+            case 2:
+                printf("Masukkan Nama yang akan di-assign: ");
+                getchar();
+                fgets(assigned_to, sizeof(assigned_to), stdin);
+                assigned_to[strcspn(assigned_to, "\n")] = 0;
+                assignTask(assigned_to);
                 break;
 
-            case 3: // Update Task
-                printf("Masukkan ID Task yang ingin diperbarui: ");
-                scanf("%d", &id_task);
-                updateTask(head, id_task);
+            case 3:
+                printf("Masukkan ID Task yang ingin diupdate: ");
+                scanf("%d", &task_id);
+                printf("Masukkan Tingkat Prioritas Baru: ");
+                scanf("%d", &priority_level);
+                printf("Masukkan Deadline Baru: ");
+                scanf("%d", &deadline);
+                updateTask(task_id, priority_level, deadline);
                 break;
 
-            case 4: // Tampilkan Semua Task
-                displayTasks(head);
+            case 4:
+                displayTasks();
                 break;
 
-            case 5: // Keluar
-                printf("Keluar dari program.\n");
-                break;
+            case 5:
+                printf("Keluar dari program\n");
+                return 0;
 
             default:
-                printf("Pilihan tidak valid! Silakan coba lagi.\n");
+                printf("Pilihan tidak valid\n");
         }
-    } while (choice != 5); // Loop akan terus berjalan sampai pengguna memilih untuk keluar (pilihan 5)
-
-    return 0;
+    }
 }
